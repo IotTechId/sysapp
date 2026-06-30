@@ -24,7 +24,7 @@ Pilih salah satu:
 scp -r /home/unknown/sysapp user@IP_SERVER:~/
 
 # atau via git kalau sudah di-push ke repo
-git clone <repo-url> sysapp
+git clone https://github.com/IotTechId/sysapp sysapp
 ```
 
 ### 3. (Opsional) sensor suhu CPU
