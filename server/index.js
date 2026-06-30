@@ -91,19 +91,52 @@ async function fetchPublicLocation() {
   }
 }
 
-// ---- Live metrics snapshot ----
-async function getMetrics() {
-  const [load, mem, fsSize, net, temp, disksIO, processes, time] =
-    await Promise.all([
-      si.currentLoad(),
-      si.mem(),
-      si.fsSize(),
-      si.networkStats(),
-      si.cpuTemperature(),
-      si.disksIO().catch(() => ({ rIO_sec: null, wIO_sec: null })),
+// ---- Slow-changing data (mahal: spawn df / baca semua /proc) ----
+// Di-cache & refresh terpisah biar tidak memperlambat loop realtime saat CPU penuh.
+const SLOW_INTERVAL = Number(process.env.SLOW_INTERVAL || 10000);
+let slowCache = {
+  disks: [],
+  processes: { all: null, running: null },
+};
+let slowRefreshing = false;
+async function refreshSlow() {
+  if (slowRefreshing) return;
+  slowRefreshing = true;
+  try {
+    const [fsSize, processes] = await Promise.all([
+      si.fsSize().catch(() => []),
       si.processes().catch(() => ({ all: null, running: null })),
-      si.time(),
     ]);
+    slowCache = {
+      disks: fsSize
+        .filter((d) => d.size > 0)
+        .map((d) => ({
+          fs: d.fs,
+          mount: d.mount,
+          type: d.type,
+          size: d.size,
+          used: d.used,
+          usePercent: round(d.use),
+        })),
+      processes: { all: processes.all, running: processes.running },
+    };
+  } catch (e) {
+    console.error("[slow] error:", e.message);
+  } finally {
+    slowRefreshing = false;
+  }
+}
+
+// ---- Live metrics snapshot (loop cepat, hanya panggilan murah) ----
+async function getMetrics() {
+  const [load, mem, net, temp, disksIO, time] = await Promise.all([
+    si.currentLoad(),
+    si.mem(),
+    si.networkStats(),
+    si.cpuTemperature(),
+    si.disksIO().catch(() => ({ rIO_sec: null, wIO_sec: null })),
+    si.time(),
+  ]);
 
   const primaryNet = net && net[0] ? net[0] : {};
 
@@ -129,16 +162,7 @@ async function getMetrics() {
       cores: (temp.cores || []).filter((c) => c > 0).map((c) => round(c)),
       max: temp.max != null && temp.max > 0 ? round(temp.max) : null,
     },
-    disks: fsSize
-      .filter((d) => d.size > 0)
-      .map((d) => ({
-        fs: d.fs,
-        mount: d.mount,
-        type: d.type,
-        size: d.size,
-        used: d.used,
-        usePercent: round(d.use),
-      })),
+    disks: slowCache.disks,
     diskIO: {
       readPerSec: disksIO.rIO_sec != null ? round(disksIO.rIO_sec) : null,
       writePerSec: disksIO.wIO_sec != null ? round(disksIO.wIO_sec) : null,
@@ -150,10 +174,7 @@ async function getMetrics() {
       rxTotal: primaryNet.rx_bytes || 0,
       txTotal: primaryNet.tx_bytes || 0,
     },
-    processes: {
-      all: processes.all,
-      running: processes.running,
-    },
+    processes: slowCache.processes,
   };
 }
 
@@ -222,13 +243,15 @@ async function broadcastLoop() {
   }
 }
 setInterval(broadcastLoop, POLL_INTERVAL);
+setInterval(refreshSlow, SLOW_INTERVAL);
 
 server.listen(PORT, () => {
   console.log(`\n  sysapp server running`);
   console.log(`  HTTP   http://localhost:${PORT}`);
   console.log(`  WS     ws://localhost:${PORT}/ws`);
-  console.log(`  poll   every ${POLL_INTERVAL}ms\n`);
+  console.log(`  poll   every ${POLL_INTERVAL}ms (fast) / ${SLOW_INTERVAL}ms (disk+proc)\n`);
   loadStaticInfo().catch((e) =>
     console.error("static info load failed:", e.message)
   );
+  refreshSlow(); // isi cache disk/proc sekali di awal
 });
