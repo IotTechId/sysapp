@@ -1,0 +1,13 @@
+{
+  "name": "sysapp",
+  "version": "1.0.0",
+  "description": "Homeserver monitor — root scripts",
+  "private": true,
+  "scripts": {
+    "setup": "bash setup.sh",
+    "install:all": "cd server && npm install && cd ../client && npm install",
+    "build": "cd client && npm run build",
+    "start": "cd server && npm start",
+    "clean": "rm -rf server/node_modules client/node_modules server/package-lock.json client/package-lock.json client/dist"
+  }
+}

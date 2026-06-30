@@ -1,0 +1,17 @@
+[Unit]
+Description=sysapp - Homeserver Monitor
+After=network.target
+
+[Service]
+Type=simple
+# Ganti User & path sesuai server-mu:
+User=unknown
+WorkingDirectory=/home/unknown/sysapp/server
+ExecStart=/usr/bin/node index.js
+Restart=on-failure
+RestartSec=5
+Environment=PORT=4000
+Environment=POLL_INTERVAL=2000
+
+[Install]
+WantedBy=multi-user.target

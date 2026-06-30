@@ -1,0 +1,16 @@
+{
+  "name": "sysapp-server",
+  "version": "1.0.0",
+  "type": "module",
+  "description": "Realtime homeserver monitoring backend",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "node --watch index.js"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "systeminformation": "^5.22.11",
+    "ws": "^8.18.0"
+  }
+}
